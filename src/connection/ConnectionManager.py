@@ -7,17 +7,21 @@ from panda3d.core import *
 class ConnectionManager(QueuedConnectionManager):
     notify = DirectNotifyGlobal.directNotify.newCategory("ConnectionManager")
 
-    def __init__(self, port_address, backlog=10000):
+    def __init__(self, port_address, openConnection=False, ip_address=None, backlog=10000):
         self.cManager = QueuedConnectionManager()
         self.cListener = QueuedConnectionListener(self.cManager, 0)
         self.cReader = QueuedConnectionReader(self.cManager, 0)
         self.cWriter = ConnectionWriter(self.cManager, 0)
         self.activeConnections = []
         self.port_address = port_address
+        self.openConnection = openConnection
+        self.ip_address = ip_address
         self.backlog = backlog
 
-        if self.port_address:
+        if self.openConnection != True:
             self.setup()
+        else:
+            self.connect(timeout=5000)
     
     def setup(self):
         self.socket = self.cManager.openTCPServerRendezvous(self.port_address, self.backlog)
@@ -25,6 +29,12 @@ class ConnectionManager(QueuedConnectionManager):
             self.cListener.addConnection(self.socket)
             taskMgr.add(self.socketListener, 'Poll the connection listener')
             taskMgr.add(self.socketReader, 'Poll the connection reader')
+
+    def connect(self, timeout):
+        self.connection = self.cManager.openTCPClientConnection(self.ip_address, self.port_address, timeout)
+        if self.connection:
+            self.cReader.addConnection(self.connection)
+            taskMgr.add(self.socketReader, 'Poll the datagram reader')
     
     def socketListener(self, task):
         if self.cListener.newConnectionAvailable():
