@@ -18,11 +18,9 @@ class MDParticipant(ChannelWatcher):
     def handleDatagram(self, dgi, connection):
         messageType = dgi.getUint16()
         if messageType == CONTROL_SET_CHANNEL:
-            self.registerNewChannel(dgi.getUint64(), connection)
+            self.registerChannel(dgi.getUint64(), connection)
         elif messageType == CONTROL_REMOVE_CHANNEL:
-            self.unRegisterChannel(dgi.getUint64(), connection)
-        elif messageType == CONTROL_CHANNEL_BY_CONN:
-            self.getChannelByConnection(dgi.getConnection(), dgi.getUint64())
+            self.unregisterChannel(dgi.getUint64(), connection)
         elif messageType == CONTROL_MESSAGE:
             self.base_class.routeMessageToChannel(dgi.getUint64(), dgi.getUint64(), dgi.getDatagram(), connection)
         elif messageType == CONTROL_ADD_RANGE:
@@ -41,7 +39,7 @@ class MDParticipant(ChannelWatcher):
             self.notify.warning("Could not handle incoming datagram: %s" % str(messageType))
             return
     
-    def registerNewChannel(self, channel, connection):
+    def registerChannel(self, channel, connection):
         if channel not in self.base_class.channels:
             if channel is None:
                 self.notify.warning("Someone tried to register a channel but the channel value was null!")
@@ -53,20 +51,13 @@ class MDParticipant(ChannelWatcher):
             self.notify.warning("Channel: %s is already registered!" % str(channel))
             return
 
-    def unRegisterChannel(self, channel, connection):
+    def unregisterChannel(self, channel, connection):
         if channel in self.base_class.channels:
             del self.base_class.channels[channel]
             self.channelWatcher.unsubscribed_channel(channel)
         else:
             self.notify.warning("Channel: %s was never registered!" % str(channel))
             return
-
-    def getChannelByConnection(self, connection, sender_channel): # TODO: Temporary until route msg is working.
-        print "SUP"
-        datagram = PyDatagram()
-        datagram.addUint16(CLIENT_AGENT_CHANNEL_FROM_CONN)
-        datagram.addUint64(self.base_class[connection])
-        self.base_class.cWriter.send(datagram, self.base_class.channels[sender_channel])
 
     def addChannelRange(self, channelRange):
         pass
