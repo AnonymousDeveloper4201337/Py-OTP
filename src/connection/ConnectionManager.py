@@ -3,12 +3,17 @@ from direct.task.TaskManagerGlobal import *
 from direct.task.Task import Task
 from pandac.PandaModules import *
 from panda3d.core import *
+import types
 
 class ConnectionManager(QueuedConnectionManager):
     notify = DirectNotifyGlobal.directNotify.newCategory("ConnectionManager")
 
+    ourChannel = 0
     dcFile = DCFile()
     dcSuffix = ''
+
+    maxChannelRange = 4096000
+    channelRangeAllocator = UniqueIdAllocator(0, 0xffffffff / maxChannelRange)
 
     def __init__(self, port_address=None, host_address=None, ip_address=None, backlog=1000):
         self.cManager = QueuedConnectionManager()
@@ -41,8 +46,8 @@ class ConnectionManager(QueuedConnectionManager):
         self.connection = self.cManager.openTCPClientConnection(self.ip_address, self.host_address, timeout)
         if self.connection:
             self.cReader.addConnection(self.connection)
+            self.registerChannel(self.ourChannel)
             taskMgr.add(self.socketReader, 'Poll the datagram reader')
-            self.registerChannel()
     
     def socketListener(self, task):
         if self.cListener.newConnectionAvailable():
@@ -54,6 +59,10 @@ class ConnectionManager(QueuedConnectionManager):
                 newConnection = newConnection.p()
                 self.activeConnections.append(newConnection)
                 self.cReader.addConnection(newConnection)
+                try:
+                    self.registerChannel(self.channelRangeAllocator.allocate())
+                except:
+                    pass
 
         return Task.cont
     

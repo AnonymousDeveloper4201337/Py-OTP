@@ -12,6 +12,7 @@ class MessageDirector(ConnectionManager, MDParticipant):
 
     activeConnections = []
     channels = {}
+    connFromChannel = {v: k for k, v in channels.items()}
     interestZones = set()
 
     def __init__(self, port_address=7100):
