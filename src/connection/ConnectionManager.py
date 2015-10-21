@@ -7,7 +7,7 @@ from panda3d.core import *
 class ConnectionManager(QueuedConnectionManager):
     notify = DirectNotifyGlobal.directNotify.newCategory("ConnectionManager")
 
-    self.dcFile = DCFile()
+    dcFile = DCFile()
     dcSuffix = ''
 
     def __init__(self, port_address=None, host_address=None, ip_address=None, backlog=1000):
