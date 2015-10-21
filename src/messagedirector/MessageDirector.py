@@ -1,86 +1,39 @@
 from src.connection.ConnectionManager import ConnectionManager
+from direct.directnotify import DirectNotifyGlobal
 from src.connection.protocol import *
+from direct.distributed.PyDatagram import PyDatagram
+from direct.distributed.PyDatagramIterator import PyDatagramIterator
+from src.messagedirector.ChannelWatcher import ChannelWatcher
+from src.messagedirector.MDParticipant import MDParticipant
 
-class MDParticipantInterface:
-    
-    channelAllocator = None
-    canClearChannel = False
-    
-    def __init__(self, base_class):
-        self.base_class = base_class
+class MessageDirector(ConnectionManager, MDParticipant):
+    notify = DirectNotifyGlobal.directNotify.newCategory("MessageDirector")
+    notify.setInfo(True)
 
-    def handleDatagram(self):
-        if messageType == CONTROL_SET_CHANNEL:
-            self.registerChannel(dgi.getUint64(), connection)
-        elif messageType == CONTROL_REMOVE_CHANNEL:
-            self.unregisterChannel(dgi.getUint64(), connection)
-        elif messageType == CONTROL_MESSAGE:
-            self.base_class.routeMessageToChannel(dgi.getUint64(), dgi.getDatagram(), connection)
-        elif messageType == CONTROL_ADD_RANGE:
-            self.addChannelRange(dgi.getUint64())
-        elif messageType == CONTROL_REMOVE_RANGE:
-            self.removeChannelRange()
-        elif messageType == CONTROL_ADD_POST_REMOVE:
-            self.addPostRemove(dgi.getUint64())
-        elif messageType == CONTROL_CLEAR_POST_REMOVE:
-            if canClearChannel:
-                self.clearPostRemove(dgi.getUint64())
-            else:
-                return # participant was not authorized to remove channel.
-        else:
-            return # Could not handle the incoming datagram!
-    
-    def registerChannel(self, channel, connection):
-        if channel not in self.base_class.channels:
-            if channel is None:
-                return # No channel was specified.
-            else:
-				self.base_class.channels[channel] = connection
-        else:
-            return # Channel: is already assigned!
-
-    def unregisterChannel(self, channel, connection):
-        if channel in self.base_class.channels:
-            if self.base_class.channels[channel] == connection:
-                del self.base_class[channel]
-            else:
-				return # Channel: was assigned to the wrong connection!
-        else:
-            return # Channel: was never registered!
-
-    def addChannelRange(self, channelRange):
-        pass
-
-    def removeChannelRange(self):
-        pass
-
-    def addPostRemove(self, channel):
-        pass
-
-    def clearPostRemove(self, channel):
-        pass
-
-class MessageDirector(ConnectionManager, MDParticipantInterface):
-
+    activeConnections = []
     channels = {}
     interestZones = set()
 
     def __init__(self, port_address=7100):
-        ConnectionManager.__init__(port_address=port_address)
-        MDParticipantInterface.__init__(self, base_class=self)
+        ConnectionManager.__init__(self, port_address=port_address)
+        MDParticipant.__init__(self, base_class=self)
+
+    def serverStarted(self, port):
+        self.notify.info("Opened connection on port %d" % port)
     
     def handleDatagram(self, datagram):
-        ConnectionManager.handleDatagram(self, datagram)
-        MDParticipantInterface.handleDatagram(self, datagram)
+        MDParticipant.handleDatagram(self, PyDatagramIterator(datagram), connection=datagram.getConnection)
 
-    def routeMessageToChannel(self, channel, datagram, connection):
+    def routeMessageToChannel(self, channel, sender, datagram, connection): # TODO remove uint16 and add sender!
         if channel in self.channels:
             if self.channels[channel] != connection:
                 self.cWriter.send(datagram, self.channel[channel])
             else:
-                return # Channel: Tried to send a datagram to its self.
+                self.notify.warning("Channel: %s tried to send a datagram to it's self!" % str(channel))
+                return
         else:
-            return # Channel: Tried to send a datagram to un-assigned channel!
+            self.notify.warning("Channel: %s tried to send a datagram to a un-assigned channel!" % str(channel))
+            return
 
-    def addInterest(self, parentId, zoneId): # TODO!
+    def addInterest(self, parentId, zoneId):
         self.interestZones.add(zoneId)
