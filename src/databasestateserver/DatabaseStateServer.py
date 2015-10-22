@@ -18,9 +18,6 @@ class DatabaseStateServer(ConnectionManager):
     def __init__(self, host_address=7100, ip_address='localhost'):
         ConnectionManager.__init__(self, host_address=host_address, ip_address=ip_address)
     
-    def serverStarted(self, port):
-        self.notify.info("Opened connection on port %d" % port)
-    
     def registerChannel(self, channel):
         dg = PyDatagram()
         dg.addUint16(CONTROL_SET_CHANNEL)
