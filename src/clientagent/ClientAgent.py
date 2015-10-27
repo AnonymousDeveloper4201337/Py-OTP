@@ -99,8 +99,6 @@ class ClientAgent:
 			self.handleClientHeartbeat(di, connection)
 		elif message_type == CLIENT_DISCONNECT:
 			self.handleClientDisconnected(di, connection)
-		elif message_type == CLIENT_LOGIN_TOONTOWN:
-			self.handleClientLoginToontown(di, connection) # Temporary todo!
 		elif message_type == CLIENT_ADD_INTEREST:
 			self.handleClientAddInterest(di, connection)
 		else:
@@ -130,35 +128,11 @@ class ClientAgent:
 	def enterWaitForNextHeartbeat(self, di, client, errorCode, reason):
 		self.lastHeartbeatTask = taskMgr.doMethodLater(self.timeUntilNextHeartbeat, self.sendDisconnectClient, "noFurtherHeartbeat", extraArgs=[di, client, errorCode, reason])
 
-	def handleClientLoginToontown(self, di, connection):
-		datagram = PyDatagram()
-		datagram.addUint16(CLIENT_LOGIN_TOONTOWN_RESP)
-		datagram.addUint8(0)
-		datagram.addString("")
-		datagram.addUint32(1)
-		datagram.addString("Skipps")
-		datagram.addUint8(0)
-		datagram.addString('YES')
-		datagram.addString('YES')
-		datagram.addString('YES')
-		datagram.addUint32(int(time.time()))
-		datagram.addUint32(int(time.clock()))
-		datagram.addString('FULL')
-		datagram.addString('YES')
-		datagram.addString(str(time.strftime("%H:%M:%S")))
-		datagram.addInt32(1000)
-		datagram.addString('NO_PARENT_ACCOUNT')
-		datagram.addString('Skipps')
-		self.cw.send(datagram, connection)
-
 	def handleClientAddInterest(self, di, connection):
 		handle = di.getUint16()
 		contextId = di.getUint32()
 		parentId = di.getUint32()
 		zoneId = di.getUint32()
-
-		datagram = PyDatagram()
-		datagram.addUint16()
 
 	def handleClientDisconnected(self, di, connection):
 		try:
