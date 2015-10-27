@@ -11,6 +11,9 @@ if base:
 	from src.clientagent.ClientAgent import ClientAgent
 	base.ca = ClientAgent()
 
+	from src.stateserver.StateServer import StateServer
+	base.ss = StateServer()
+
 try:
 	base.run()
 except:

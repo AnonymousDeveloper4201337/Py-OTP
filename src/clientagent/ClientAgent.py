@@ -101,6 +101,10 @@ class ClientAgent:
 			self.handleClientDisconnected(di, connection)
 		elif message_type == CLIENT_ADD_INTEREST:
 			self.handleClientAddInterest(di, connection)
+		elif message_type == CLIENT_REMOVE_INTEREST:
+			self.handleClientRemoveInterest(di, connection)
+		elif message_type == STATESERVER_BOUNCE_MESSAGE:
+			self.handleStateServerBounceMessage(di, connection)
 		else:
 			return
 
@@ -133,6 +137,58 @@ class ClientAgent:
 		contextId = di.getUint32()
 		parentId = di.getUint32()
 		zoneId = di.getUint32()
+
+		datagram = PyDatagram()
+		datagram.addUint16(CONTROL_MESSAGE)
+		datagram.addUint64(10000002) # StateServer's channel
+		datagram.addUint64(self.ourChannel)
+		datagram.addUint16(CLIENT_AGENT_SET_INTEREST)
+		datagram.addUint16(handle)
+		datagram.addUint33(contextId)
+		datagram.addUint33(parentId)
+		datagram.addUint33(zoneId)
+		self.cw.send(datagram, self.connection)
+
+	def sendClientAddInterest(self, di, connection, handle, contextId, parentId, zoneId):
+		datagram = PyDatagram()
+		datagram.addUint16(CLIENT_DONE_INTEREST_RESP)
+		datagram.addUint16(handle)
+		datagram.addUint32(contextId)
+
+		client_channel = self.connectionToChannel[connection]
+		if client_channel in self.registeredClients:
+			self.cw.send(datagram, connection)
+
+	def handleClientRemoveInterest(self, di, connection):
+		handle = di.getUint16()
+		contextId = di.getUint64()
+
+		datagram = PyDatagram()
+		datagram.addUint16(CONTROL_MESSAGE)
+		datagram.addUint64(10000002) # StateServer's channel
+		datagram.addUint64(self.ourChannel)
+		datagram.addUint16(CLIENT_AGENT_REMOVE_INTEREST)
+		datagram.addUint16(handle)
+		datagram.addUint33(contextId)
+		self.cw.send(datagram, self.connection)
+
+	def sendClientRemoveInterest(self, di, connection, handle, contextId):
+		datagram = PyDatagram()
+		datagram.addUint16(CLIENT_REMOVE_INTEREST)
+		datagram.addUint16(handle)
+		datagram.addUint32(contextId)
+
+		client_channel = self.connectionToChannel[connection]
+		if client_channel in self.registeredClients:
+			self.cw.send(datagram, connection)
+
+	def handleStateServerBounceMessage(self, di, connection):
+		msg = di.getUint16()
+
+		if msg == CLIENT_AGENT_SET_INTEREST:
+			self.sendClientAddInterest(di, connection, handle=di.getUint16(), contextId=di.getUint32(), parentId=di.getUint32(), zoneId=di.getUint32())
+		elif msg == CLIENT_AGENT_REMOVE_INTEREST:
+			self.sendClientRemoveInterest(di, connection, handle=di.getUint16(), contextId=di.getUint32())
 
 	def handleClientDisconnected(self, di, connection):
 		try:
