@@ -45,7 +45,7 @@ class MDParticipant:
 		di.skipBytes(16)
 		# This is the channel the data is being routed to. We need this but, does the client really need
 		# to be informed of its own channel?
-		skipBytes(64)
+		di.skipBytes(64)
 
 		datagram = PyDatagram()
 		# Pack the remaining bytes and ship the message out.
