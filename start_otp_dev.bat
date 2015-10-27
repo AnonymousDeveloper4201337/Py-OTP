@@ -1,5 +1,5 @@
 @echo off
 :goto
-ppython -m main.py
+ppython -m main
 pause
 goto :goto

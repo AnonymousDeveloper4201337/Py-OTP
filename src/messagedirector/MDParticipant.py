@@ -1,72 +1,50 @@
-from direct.directnotify import DirectNotifyGlobal
-from src.connection.protocol import *
-from direct.distributed.PyDatagram import PyDatagram
 from direct.distributed.PyDatagramIterator import PyDatagramIterator
-from src.messagedirector.ChannelWatcher import ChannelWatcher
+from direct.distributed.PyDatagram import PyDatagram
+from src.connection.msgtypes import *
+from pandac.PandaModules import *
 
-class MDParticipant(ChannelWatcher):
-    notify = DirectNotifyGlobal.directNotify.newCategory("MessageDirectorParticipant")
-    notify.setInfo(True)
-    
-    channelAllocator = None
-    canClearChannel = False
-    channelWatcher = ChannelWatcher()
-    
-    def __init__(self, base_class):
-        self.base_class = base_class
+class MDParticipant:
 
-    def handleDatagram(self, dgi, connection):
-        messageType = dgi.getUint16()
-        if messageType == CONTROL_SET_CHANNEL:
-            self.registerChannel(dgi.getUint64(), connection)
-        elif messageType == CONTROL_REMOVE_CHANNEL:
-            self.unregisterChannel(dgi.getUint64(), connection)
-        elif messageType == CONTROL_MESSAGE:
-            self.base_class.routeMessageToChannel(dgi.getUint64(), dgi.getUint64(), dgi.getDatagram(), connection)
-        elif messageType == CONTROL_ADD_RANGE:
-            self.addChannelRange(dgi.getUint64())
-        elif messageType == CONTROL_REMOVE_RANGE:
-            self.removeChannelRange()
-        elif messageType == CONTROL_ADD_POST_REMOVE:
-            self.addPostRemove(dgi.getUint64())
-        elif messageType == CONTROL_CLEAR_POST_REMOVE:
-            if canClearChannel:
-                self.clearPostRemove(dgi.getUint64())
-            else:
-                self.notify.warning("Participant was not authorized to remove channel: %s" % str(dgi.getUint64()))
-                return
-        else:
-            self.notify.warning("Could not handle incoming datagram: %s" % str(messageType))
-            return
-    
-    def registerChannel(self, channel, connection):
-        if channel not in self.base_class.channels:
-            if channel is None:
-                self.notify.warning("Someone tried to register a channel but the channel value was null!")
-                return
-            else:
-                self.base_class.channels[channel] = connection
-                self.channelWatcher.subscribed_channel(channel)
-        else:
-            self.notify.warning("Channel: %s is already registered!" % str(channel))
-            return
+	def __init__(self):
+		pass
 
-    def unregisterChannel(self, channel, connection):
-        if channel in self.base_class.channels:
-            del self.base_class.channels[channel]
-            self.channelWatcher.unsubscribed_channel(channel)
-        else:
-            self.notify.warning("Channel: %s was never registered!" % str(channel))
-            return
+	def handleDatagram(self, datagram):
+		connection = datagram.getConnection()
+		if not connection:
+			return
 
-    def addChannelRange(self, channelRange):
-        pass
+		di = PyDatagramIterator(datagram)
+		message_type = di.getUint16()
 
-    def removeChannelRange(self):
-        pass
+		if message_type == CONTROL_SET_CHANNEL:
+			self.registerChannel(di.getUint64(), connection)
+		elif message_type == CONTROL_REMOVE_CHANNEL:
+			self.unregisterChannel(di.getUint64())
+		elif message_type == CONTROL_MESSAGE:
+			self.routeMessage(di.getUint64(), di.getDatagram())
 
-    def addPostRemove(self, channel):
-        pass
+	def registerChannel(self, channel, connection):
+		if channel not in self.registeredChannels:
+			self.registeredChannels[channel] = connection
+		else:
+			return
 
-    def clearPostRemove(self, channel):
-        pass
+	def unregisterChannel(self, channel):
+		if channel in self.registeredChannels:
+			del self.registeredChannels[channel]
+		else:
+			return
+
+	def routeMessage(self, channel, datagram):
+		if not datagram:
+			return
+
+		di = PyDatagramIterator(datagram)
+		# The message director used this value for determining which process the connection requested, but
+		# we don't want to send this value over the network because its unnecessary.
+		di.skipBytes(16)
+
+		datagram = PyDatagram()
+		# Pack the remaining bytes and ship the message out.
+		datagram.appendData(di.getRemainingBytes())
+		self.routeMessageToChannel(channel, datagram)

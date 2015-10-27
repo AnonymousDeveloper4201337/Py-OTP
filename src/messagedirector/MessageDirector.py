@@ -1,40 +1,57 @@
-from src.connection.ConnectionManager import ConnectionManager
-from direct.directnotify import DirectNotifyGlobal
-from src.connection.protocol import *
-from direct.distributed.PyDatagram import PyDatagram
 from direct.distributed.PyDatagramIterator import PyDatagramIterator
-from src.messagedirector.ChannelWatcher import ChannelWatcher
 from src.messagedirector.MDParticipant import MDParticipant
+from direct.distributed.PyDatagram import PyDatagram
+from direct.task.Task import Task
+from pandac.PandaModules import *
+from panda3d.core import *
 
-class MessageDirector(ConnectionManager, MDParticipant):
-    notify = DirectNotifyGlobal.directNotify.newCategory("MessageDirector")
-    notify.setInfo(True)
+class MessageDirector(MDParticipant):
 
-    activeConnections = []
-    channels = {}
-    connFromChannel = {v: k for k, v in channels.items()}
-    interestZones = set()
+	registeredChannels = {}
 
-    def __init__(self, port_address=7100):
-        ConnectionManager.__init__(self, port_address=port_address)
-        MDParticipant.__init__(self, base_class=self)
+	def __init__(self, tcpPort=7100, threadNet=0):
+		self.qcm = QueuedConnectionManager()
+		self.qcl = QueuedConnectionListener(self.qcm, threadNet)
+		self.qcr = QueuedConnectionReader(self.qcm, threadNet)
+		self.cw = ConnectionWriter(self.qcm, threadNet)
+		self.start_server(tcpPort)
 
-    def serverStarted(self, port):
-        self.notify.info("Opened connection on port %d" % port)
-    
-    def handleDatagram(self, datagram):
-        MDParticipant.handleDatagram(self, PyDatagramIterator(datagram), connection=datagram.getConnection)
+	def start_server(self, port, backlog=1000):
+		self.socket = self.qcm.openTCPServerRendezvous(port, backlog)
+		if self.socket:
+			self.qcl.addConnection(self.socket)
+			taskMgr.add(self.serverListenerPolling, "Poll the connection listener")
+			taskMgr.add(self.serverReaderPolling, "Poll the connection reader")
 
-    def routeMessageToChannel(self, channel, sender, datagram, connection): # TODO remove uint16 and add sender!
-        if channel in self.channels:
-            if self.channels[channel] != connection:
-                self.cWriter.send(datagram, self.channel[channel])
-            else:
-                self.notify.warning("Channel: %s tried to send a datagram to it's self!" % str(channel))
-                return
-        else:
-            self.notify.warning("Channel: %s tried to send a datagram to a un-assigned channel!" % str(channel))
-            return
+	def serverListenerPolling(self, task):
+		if self.qcl.newConnectionAvailable():
+			rendezvous = PointerToConnection()
+			netAddress = NetAddress()
+			newConnection = PointerToConnection()
 
-    def addInterest(self, parentId, zoneId):
-        self.interestZones.add(zoneId)
+			if self.qcl.getNewConnection(rendezvous, netAddress, newConnection):
+				newConnection = newConnection.p()
+				self.qcr.addConnection(newConnection)
+  		
+		return Task.cont
+ 
+	def serverReaderPolling(self, task):
+		if self.qcr.dataAvailable():
+			datagram = NetDatagram()
+			
+			if self.qcr.getData(datagram):
+				self.handleDatagram(datagram)
+
+		return Task.cont
+
+	def handleDatagram(self, datagram):
+		MDParticipant.handleDatagram(self, datagram)
+
+	def routeMessageToChannel(self, channel, datagram):
+		if channel in self.registeredChannels:
+			if datagram == None:
+				return
+
+			self.cw.send(datagram, self.registeredChannels[channel])
+		else:
+			return
